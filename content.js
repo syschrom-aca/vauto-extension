@@ -511,7 +511,7 @@
           <div class="vi-tile">
             <div class="vi-lbl">
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/></svg>
-                CDK Status
+                DeskIt deal status
             </div>
             <div class="vi-status-val" style="font-weight: 700;">${d.cdkstatus != null ? d.cdkstatus : '—'}</div>
           </div>
