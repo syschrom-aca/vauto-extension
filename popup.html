@@ -80,36 +80,8 @@
       50% { box-shadow: 0 0 0 4px #dcfce7; }
     }
 
-    /* ── TABS ── */
-    .tabs-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      padding: 0 16px;
-      gap: 0;
-    }
-    .tab-btn {
-      padding: 10px 14px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      cursor: pointer;
-      transition: all 0.15s;
-      font-family: 'DM Sans', sans-serif;
-      white-space: nowrap;
-    }
-    .tab-btn:hover { color: var(--text-primary); }
-    .tab-btn.active {
-      color: var(--accent-blue);
-      border-bottom-color: var(--accent-blue);
-    }
-
     /* ── CONTENT ── */
-    .tab-content { display: none; padding: 14px 16px; }
-    .tab-content.active { display: block; }
+    #tab-panel { padding: 14px 16px; }
 
     /* ── VIN BAR ── */
     .vin-bar {
@@ -298,14 +270,6 @@
     .status-tile-value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .status-tile-value.retail { color: var(--accent-blue); }
 
-    /* ── SECTION DIVIDER ── */
-    .section-divider {
-      padding: 10px 14px 4px;
-      font-size: 11px; font-weight: 700;
-      text-transform: uppercase; letter-spacing: 0.6px;
-      color: var(--text-muted);
-    }
-
     /* ── LOADING STATE ── */
     .loading-state {
       padding: 24px; text-align: center;
@@ -327,86 +291,7 @@
     }
     .empty-icon { font-size: 28px; margin-bottom: 8px; }
 
-    /* ── INTEGRATION TAB ── */
-    .info-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      margin-bottom: 10px;
-      box-shadow: var(--shadow-sm);
-    }
-    .info-card-title {
-      font-size: 12px; font-weight: 700;
-      color: var(--text-primary); margin-bottom: 10px;
-      display: flex; align-items: center; gap: 6px;
-    }
-    .info-card-title .icon {
-      width: 20px; height: 20px;
-      background: var(--accent-blue-light);
-      border-radius: 5px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px;
-    }
-    .info-card.amber { border-color: #fcd34d; background: #fffbeb; }
-    .info-card.amber .info-card-title { color: #92400e; }
 
-    .step-list { list-style: none; counter-reset: steps; }
-    .step-list li {
-      counter-increment: steps;
-      display: flex; align-items: flex-start; gap: 8px;
-      font-size: 11px; color: var(--text-secondary);
-      padding: 4px 0;
-      border-bottom: 1px solid var(--border-light);
-    }
-    .step-list li:last-child { border-bottom: none; }
-    .step-list li::before {
-      content: counter(steps);
-      min-width: 18px; height: 18px;
-      background: var(--accent-blue);
-      color: white;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 700;
-      margin-top: 1px;
-    }
-
-    code {
-      font-family: 'DM Mono', monospace;
-      font-size: 10px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 2px 5px;
-      border-radius: 3px;
-      color: var(--accent-blue);
-    }
-
-    .bullet-list { list-style: none; }
-    .bullet-list li {
-      font-size: 11px; color: #92400e;
-      padding: 3px 0;
-      display: flex; align-items: flex-start; gap: 6px;
-    }
-    .bullet-list li::before { content: "•"; font-weight: 700; margin-top: 0; }
-
-    /* ── SETTINGS TAB ── */
-    .settings-group { margin-bottom: 14px; }
-    .settings-group-title {
-      font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.5px; color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .settings-row {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 6px;
-      font-size: 12px;
-    }
-    .settings-row-label { font-weight: 500; color: var(--text-primary); }
-    .settings-row-sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
     .settings-input {
       font-family: 'DM Mono', monospace;
       font-size: 11px;
@@ -422,41 +307,6 @@
       border-color: var(--accent-blue);
       box-shadow: 0 0 0 2px var(--accent-blue-light);
     }
-    .toggle {
-      width: 34px; height: 18px;
-      background: var(--border);
-      border-radius: 9px;
-      position: relative; cursor: pointer;
-      border: none;
-      transition: background 0.2s;
-    }
-    .toggle.on { background: var(--accent-blue); }
-    .toggle::after {
-      content: '';
-      width: 14px; height: 14px;
-      background: white;
-      border-radius: 50%;
-      position: absolute; top: 2px; left: 2px;
-      transition: transform 0.2s;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-    .toggle.on::after { transform: translateX(16px); }
-    .save-btn {
-      width: 100%;
-      padding: 10px;
-      background: var(--accent-blue);
-      color: white;
-      border: none;
-      border-radius: var(--radius-sm);
-      font-family: 'DM Sans', sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .save-btn:hover { background: #1d4ed8; }
-    .save-btn:active { background: #1e40af; }
-
     /* Fabric connection indicator */
     .fabric-badge {
       display: inline-flex; align-items: center; gap: 5px;
@@ -499,7 +349,7 @@
 </div>
 
 <!-- ══════════ TAB: VEHICLE PANEL ══════════ -->
-<div class="tab-content active" id="tab-panel">
+<div id="tab-panel">
 
   <div class="vin-bar" style="margin-bottom:12px;">
     <span class="vin-label">VIN</span>
@@ -613,112 +463,6 @@
   </div>
 </div>
 
-<!-- ══════════ TAB: FULL VIEW ══════════ -->
-<div class="tab-content" id="tab-fullview">
-  <div class="vin-bar" style="margin-bottom:12px;">
-    <span class="vin-label">VIN</span>
-    <input id="manual-vin-input" placeholder="Enter VIN manually..." class="settings-input" style="flex:1;width:auto;" />
-    <button id="lookup-manual-btn" style="padding:4px 12px;background:var(--accent-blue);color:white;border:none;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Lookup</button>
-  </div>
-
-  <div class="section-divider">Recent VINs</div>
-  <div id="recent-vins-list" style="padding: 0 0 10px 0;">
-    <!-- Populated by JS -->
-    <div style="padding:10px 0; font-size:11px; color:var(--text-muted); text-align:center;">No recent VINs in this session</div>
-  </div>
-
-  <div class="section-divider">Data Preview</div>
-  <div id="full-view-data" style="padding-bottom:10px;">
-    <div style="padding:16px; text-align:center; font-size:11px; color:var(--text-muted);">Select or enter a VIN above to preview data</div>
-  </div>
-</div>
-
-<!-- ══════════ TAB: INTEGRATION ══════════ -->
-<div class="tab-content" id="tab-integration">
-
-  <div class="info-card">
-    <div class="info-card-title">
-      <div class="icon">🔧</div>
-      Setup Instructions
-    </div>
-    <ol class="step-list">
-      <li>Load this extension in Chrome via <code>chrome://extensions</code> (Developer mode)</li>
-      <li>Navigate to any vAuto inventory page — VINs are auto-detected</li>
-      <li>Configure your Microsoft Fabric endpoint in the <strong>Settings</strong> tab</li>
-      <li>The content script reads the active VIN and fetches data from Fabric</li>
-    </ol>
-  </div>
-
-  <div class="info-card">
-    <div class="info-card-title">
-      <div class="icon">📡</div>
-      Fabric API Endpoint
-    </div>
-    <p style="font-size:11px; color:var(--text-secondary); margin-bottom:8px;">The extension calls your Fabric view/table at:</p>
-    <code style="display:block; padding:8px; font-size:10px; word-break:break-all; color:var(--accent-blue);">
-      GET {FABRIC_ENDPOINT}/vehicle/{VIN}
-    </code>
-    <p style="font-size:10px; color:var(--text-muted); margin-top:6px;">Configure the base URL in Settings. Auth token is sent as Bearer in the Authorization header.</p>
-  </div>
-
-  <div class="info-card amber">
-    <div class="info-card-title">
-      <div class="icon" style="background:#fde68a;">📦</div>
-      Data Warehouse Sync
-    </div>
-    <p style="font-size:11px; color:#92400e; margin-bottom:8px;">To keep vehicle data fresh from your warehouse:</p>
-    <ul class="bullet-list">
-      <li>Create a scheduled job in Fabric to materialise a vehicle view</li>
-      <li>Expose the view via Fabric REST API or Azure API Management</li>
-      <li>Set refresh interval to match your pricing cadence</li>
-      <li>Map VIN as the primary key in the view/table</li>
-    </ul>
-  </div>
-
-</div>
-
-<!-- ══════════ TAB: SETTINGS ══════════ -->
-<div class="tab-content" id="tab-settings">
-
-  <div class="settings-group">
-    <div class="settings-group-title">Behaviour</div>
-    <div class="settings-row">
-      <div>
-        <div class="settings-row-label">Auto-detect VIN from page</div>
-        <div class="settings-row-sub">Reads VIN from the active vAuto listing</div>
-      </div>
-      <button class="toggle on" id="toggle-auto-vin" onclick="toggleSwitch(this)"></button>
-    </div>
-    <div class="settings-row">
-      <div>
-        <div class="settings-row-label">Show panel on VIN change</div>
-        <div class="settings-row-sub">Auto-open popup when a new VIN is detected</div>
-      </div>
-      <button class="toggle on" id="toggle-auto-open" onclick="toggleSwitch(this)"></button>
-    </div>
-    <div class="settings-row">
-      <div>
-        <div class="settings-row-label">Cache results (5 min)</div>
-        <div class="settings-row-sub">Avoid repeated calls for the same VIN</div>
-      </div>
-      <button class="toggle on" id="toggle-cache" onclick="toggleSwitch(this)"></button>
-    </div>
-  </div>
-
-  <div class="settings-group">
-    <div class="settings-group-title">Display</div>
-    <div class="settings-row">
-      <div>
-        <div class="settings-row-label">Compact mode (480×250px)</div>
-        <div class="settings-row-sub">Optimised for the vAuto red-box area</div>
-      </div>
-      <button class="toggle on" id="toggle-compact" onclick="toggleSwitch(this)"></button>
-    </div>
-  </div>
-
-  <button class="save-btn" onclick="saveSettings()">Save Settings</button>
-  <p id="save-msg" style="text-align:center;font-size:11px;color:var(--accent-green);margin-top:8px;display:none;">✓ Settings saved</p>
-</div>
 <script src="popup.js"></script>
 <div id="app-version" style="position: fixed; bottom: 10px; right: 5px; writing-mode: vertical-rl; transform: rotate(180deg); color: #9ca3af; font-size: 10px; opacity: 0.7; pointer-events: none;"></div>
 </body>

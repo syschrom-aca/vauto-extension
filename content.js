@@ -1,30 +1,72 @@
 /**
- * content.js — vAuto Vehicle Intelligence
+ * content.js — vAuto Vehicle Intelligence (content script)
+ * =========================================================
  *
- * Injects the VI panel directly into the vAuto pricing modal,
- * occupying the chart/history area (the red box).
- * Collapses to a floating bar at the bottom-right of the modal.
+ * WHAT THIS FILE DOES
+ * -------------------
+ * Runs on vAuto / Cox Automotive pages (see `matches` in manifest.json).
+ * When a vehicle pricing view is open, it reads the current VIN + Stock #
+ * from the page and injects a floating "Vehicle Intelligence" (VI) panel
+ * that shows Microsoft Fabric data for that vehicle. The panel can be
+ * minimized to a small draggable bar and expands again on click.
+ *
+ * HIGH-LEVEL FLOW
+ * ---------------
+ *   1. A MutationObserver + a polling interval both call `checkForModal()`.
+ *   2. `checkForModal()` detects whether a pricing view is open and reads
+ *      the VIN (`detectVin`) and Stock # (`detectStock`) from the DOM/iframe.
+ *   3. On a new VIN/Stock, `injectPanel()` builds the UI and calls `loadData()`.
+ *   4. `loadData()` asks the background service worker for Fabric data via
+ *      `chrome.runtime.sendMessage({ action: 'fetchVehicleData', ... })`.
+ *      (The actual network request lives in background.js.)
+ *   5. `renderData()` fills the panel; errors are shown by the error branch,
+ *      including a RAW debug string when the VIN is not in the dataset.
+ *
+ * KEY FUNCTIONS (in order)
+ * ------------------------
+ *   detectVin / detectStock  – scrape VIN + Stock # from modal/header/iframe.
+ *   findChartContainer       – locate the vAuto chart "red box" to overlay.
+ *   findModalRoot            – find the modal root, used to anchor the bar.
+ *   injectPanel              – build the panel + bar and wire up events.
+ *   positionOverChartArea /
+ *   positionBar              – place the panel/bar on screen.
+ *   makeDraggable            – allow the panel to be dragged by its header.
+ *   minimize / expand        – toggle between the panel and the compact bar.
+ *   loadData                 – request vehicle data from the background worker.
+ *   setStatus / renderData   – update the status dot and render Fabric metrics.
+ *   buildPanelHTML /
+ *   buildBarHTML             – return the inline HTML/CSS templates.
+ *   checkForModal            – the main loop: detect view, inject/refresh UI.
+ *
+ * DEPENDENCIES / CONTRACTS
+ * ------------------------
+ *   - background.js: responds to { action: 'fetchVehicleData', vin, stock }
+ *     with { success, data } or { success:false, error }. A missing vehicle
+ *     is signalled by an error message prefixed with 'NOMATCH|'.
+ *   - No chrome.storage / chrome.tabs are used here (kept permission-free);
+ *     the only extension API used is chrome.runtime.
+ *
+ * NOTE: The panel markup and styles are injected inline (see buildPanelHTML)
+ *       so the extension does not depend on external CSS files.
  */
 
 (function () {
   'use strict';
 
-  const VIN_REGEX = /\b[A-HJ-NPR-Z0-9]{17}\b/;
   let injectedPanel = null;
   let injectedBar   = null;
   let currentVin    = null;
-  let isMinimized   = false;  
 
   // ─── VIN detection ────────────────────────────────────────────────────────
 	function detectVin() {
-		// 1. Zdefiniuj źródła w kolejności priorytetu
+		// 1. Define the sources in priority order
 		const modal = document.querySelector('.pricing-modal-class');
 		const header = document.getElementById('headerVehicleSummary');
 		const iframe = document.getElementById('GaugePageIFrame');
 
 		let sourceText = "";
 
-		// 2. Pobierz tekst z dostępnego źródła
+		// 2. Get text from the available source
 		if (modal) {
 			sourceText = modal.innerText;
 		} else if (header) {
@@ -34,12 +76,12 @@
 				const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 				sourceText = iframeDoc.body.innerText;
 			} catch (e) {
-				// Cichy błąd, jeśli iframe jest zablokowany przez CORS
+				// Silent failure if the iframe is blocked by CORS
 				sourceText = "";
 			}
 		}
 
-		// 3. Szukaj VIN w pobranym tekście
+		// 3. Search for the VIN in the retrieved text
 		if (!sourceText) return null;
 
 		const match = sourceText.match(/VIN\s*:?\s*([A-HJ-NPR-Z0-9]{17})/i);
@@ -48,14 +90,14 @@
 		  
   // ─── Stock Number detection ──────────────────────────────────────────────  
 	function detectStock() {
-		// 1. Zdefiniuj źródła w kolejności priorytetu
+		// 1. Define the sources in priority order
 		const modal = document.querySelector('.pricing-modal-class');
 		const header = document.getElementById('headerVehicleSummary');
 		const iframe = document.getElementById('GaugePageIFrame');
 
 		let sourceText = "";
 
-		// 2. Pobierz tekst z dostępnego źródła
+		// 2. Get text from the available source
 		if (modal) {
 			sourceText = modal.innerText;
 		} else if (header) {
@@ -65,12 +107,12 @@
 				const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
 				sourceText = iframeDoc.body.innerText;
 			} catch (e) {
-				// Cichy błąd, jeśli iframe jest zablokowany przez CORS
+				// Silent failure if the iframe is blocked by CORS
 				sourceText = "";
 			}
 		}
 
-		// 3. Szukaj VIN w pobranym tekście
+		// 3. Search for the VIN in the retrieved text
 		if (!sourceText) return null;
 
 		const match = sourceText.match(/Stock\s*#\s*:?\s*([\w-]+)/i);
@@ -131,11 +173,11 @@
   }
 
   // ─── Inject panel ─────────────────────────────────────────────────────────
-	// ─── Zaktualizowana funkcja wstrzykująca ──────────────────────────────────
+	// ─── Updated injection function ──────────────────────────────────
 	function injectPanel(vin, stock) {
 	  if (injectedPanel) return;
 
-	  // 1. Stworzenie panelu głównego
+	  // 1. Create the main panel
 	  const panel = document.createElement('div');
 	  panel.id = 'vi-panel';
 	  Object.assign(panel.style, {
@@ -154,9 +196,9 @@
 		makeDraggable(panel, header);
 	  }
 
-	  // 2. Obsługa kliknięć w panelu (Delegacja zdarzeń)
+	  // 2. Handle clicks inside the panel (event delegation)
 	  panel.addEventListener('click', (e) => {
-		// Sprawdzamy co dokładnie zostało kliknięte
+		// Check what exactly was clicked
 		if (e.target.closest('[title="Refresh"]') || e.target.closest('.vi-ftr-btn')) {
 		  loadData(vin, stock);
 		} else if (e.target.closest('[title="Minimize to bar"]')) {
@@ -166,7 +208,7 @@
 
 	  positionOverChartArea();
 
-	  // 3. Stworzenie paska (bar)
+	  // 3. Create the bar
 	  const bar = document.createElement('div');
 	  bar.id = 'vi-bar';
 	  Object.assign(bar.style, {
@@ -180,7 +222,7 @@
 	  document.body.appendChild(bar);
 	  injectedBar = bar;
 
-	  // 4. Obsługa kliknięcia w pasek
+	  // 4. Handle clicks on the bar
 	  bar.addEventListener('click', () => {
 		expand();
 	  });
@@ -207,12 +249,12 @@
 			right:  'auto',
 		  });
 		} else {
-		  // Fallback: Pozycjonowanie w prawym dolnym rogu (jak positionBar)
+		  // Fallback: position in the bottom-right corner (like positionBar)
 		  const modal = findModalRoot();
 		  const r = modal.getBoundingClientRect();
 		  
 		  Object.assign(injectedPanel.style, {
-			// Obliczamy pozycję od dołu i prawej krawędzi okna
+			// Calculate the position from the bottom and right edges of the window
 			bottom: Math.max(16, window.innerHeight - r.bottom + 64) + 'px',
 			right:  Math.max(16, window.innerWidth  - r.right  + 14) + 'px',
 			top:    'auto',
@@ -238,16 +280,16 @@
   function makeDraggable(el, handle) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
 
-    handle.style.cursor = 'move'; // Zmieniamy kursor na nagłówku
+    handle.style.cursor = 'move'; // Change the cursor on the header
     handle.onmousedown = dragMouseDown;
 
     function dragMouseDown(e) {
       e = e || window.event;
-      // Nie pozwalamy na przeciąganie, jeśli kliknięto w przycisk (refresh/minimize)
+      // Do not allow dragging if a button was clicked (refresh/minimize)
       if (e.target.closest('.vi-icon-btn')) return;
       
       e.preventDefault();
-      // Pobieramy pozycję kursora przy starcie
+      // Get the cursor position at the start
       pos3 = e.clientX;
       pos4 = e.clientY;
       document.onmouseup = closeDragElement;
@@ -257,23 +299,23 @@
     function elementDrag(e) {
       e = e || window.event;
       e.preventDefault();
-      // Obliczamy nową pozycję kursora
+      // Calculate the new cursor position
       pos1 = pos3 - e.clientX;
       pos2 = pos4 - e.clientY;
       pos3 = e.clientX;
       pos4 = e.clientY;
       
-      // Ustawiamy nową pozycję elementu
+      // Set the new element position
       el.style.top = (el.offsetTop - pos2) + "px";
       el.style.left = (el.offsetLeft - pos1) + "px";
       
-      // Resetujemy 'right' i 'bottom', żeby nie kolidowały z nowym 'top/left'
+      // Reset 'right' and 'bottom' so they don't conflict with the new 'top/left'
       el.style.right = 'auto';
       el.style.bottom = 'auto';
     }
 
     function closeDragElement() {
-      // Przestajemy śledzić, gdy puścimy przycisk myszy
+      // Stop tracking once the mouse button is released
       document.onmouseup = null;
       document.onmousemove = null;
     }
@@ -281,13 +323,11 @@
 
   // ─── Minimize / Expand ────────────────────────────────────────────────────
   function minimize() {
-    isMinimized = true;
     if (injectedPanel) injectedPanel.style.display = 'none';
     if (injectedBar)   { injectedBar.style.display = 'block'; positionBar(); }
   }
 
   function expand() {
-    isMinimized = false;
     if (injectedBar)   injectedBar.style.display = 'none';
     if (injectedPanel) { injectedPanel.style.display = 'block'; positionOverChartArea(); }
   }
@@ -320,19 +360,19 @@
       let errorText = e.message || 'Connection Error';
       let rawData = '';
 
-      // Wyodrębnianie RAW data z błędu
+      // Extract RAW data from the error
       if (errorText.startsWith('NOMATCH|')) {
          rawData = errorText.split('|').slice(1).join('|');
          errorText = 'No Match Found';
       }
 
-      // Aktualizujemy główny tytuł, żeby nie pokazywał "Connection Error" przy braku danych
+      // Update the main title so it does not show "Connection Error" when there is no data
       if (title) {
         title.textContent = errorText === 'No Match Found' ? 'Vehicle Not Found' : 'Connection Error';
       }
 
       if (msg) {
-        // Opis pod tytułem
+        // Description under the title
         msg.textContent = errorText === 'No Match Found' ? 'This VIN is not in your Fabric dataset.' : errorText;
         
         // Debug box dla RAW data
@@ -344,7 +384,7 @@
             errEl.appendChild(debugEl);
         }
         
-        debugEl.textContent = rawData ? 'RAW: ' + (rawData === '[]' ? '[Pusta tablica]' : rawData) : 'RAW: (No data → empty string)';
+        debugEl.textContent = rawData ? 'RAW: ' + (rawData === '[]' ? '[Empty array]' : rawData) : 'RAW: (No data → empty string)';
         debugEl.style.display = 'block';
       }
     }
@@ -365,16 +405,16 @@
     if (loadEl) loadEl.style.display = 'none';
     if (errEl)  errEl.style.display  = 'none';	
 	
-	// Aktualizacja Tieru w nagłówku
+	// Update the tier in the header
 	const tierPill = document.getElementById('vi-tier-pill');
 	if (tierPill) {
 		const tierValue = d.performancetier;
-		// Usuwamy stare klasy tier-X przed dodaniem nowej
+		// Remove the old tier-X classes before adding the new one
 		tierPill.className = 'vi-hdr-tier'; 
 		
 		if (tierValue && tierValue !== "null") {
 			tierPill.textContent = tierValue;
-			// Wyciągamy cyfrę z "Tier X" (np. "Tier 1" -> "1")
+			// Extract the digit from "Tier X" (e.g. "Tier 1" -> "1")
 			const tierNum = tierValue.replace(/\D/g, '');
 			if (tierNum) tierPill.classList.add(`vi-tier-${tierNum}`);
 		} else {
@@ -383,23 +423,23 @@
 		}
 	}
 	
-	// Funkcja pomocnicza do określania koloru
+	// Helper function to determine the color
     const getGrossClass = (val) => {
         const num = Number(val);
         if (isNaN(num) || num === 0) return 'ambient';
         return num > 0 ? 'green' : 'red';
     };
 
-    // Formatowanie walut
+    // Currency formatting
     const formatCurrency = (val) => {
         if (val == null || val === "") return '—';
         const num = Number(val);
-        // Dodajemy znak minus przed dolarem dla wartości ujemnych: -$500
+        // Add a minus sign before the dollar sign for negative values: -$500
         const prefix = num < 0 ? '-$' : '$';
         return prefix + Math.abs(num).toLocaleString('en-US', { maximumFractionDigits: 0 });
     };
 
-    // Pobieranie klas dla poszczególnych wartości
+    // Get the classes for the individual values
     const frontClass = getGrossClass(d.avgfrontgross);
     const backClass  = getGrossClass(d.avgbackgross);
     const totalClass = getGrossClass(d.avgtotalgross);
@@ -408,23 +448,12 @@
     const backGross  = formatCurrency(d.avgbackgross);
     const totalGross = formatCurrency(d.avgtotalgross);
 	
-	// Formatuje numer na procenty
+	// Formats a number as a percentage
     const formatPercent = (val) => {
         if (val == null || val === "" || val === "null") return '—';
         return (Number(val) * 100).toFixed(1) + '%';
     };
 	const mktPercent = formatPercent(d.avgsalestomarket);
-
-	// marketPosition
-    const mktBadge = d.marketposition === 'Below'
-      ? `<span class="vi-mkt-badge vi-mkt-below">▼ Below market</span>`
-      : d.marketposition === 'Above'
-        ? `<span class="vi-mkt-badge vi-mkt-above">▲ Above market</span>`
-		: d.marketposition === 'At'
-			? `<span class="vi-mkt-badge vi-mkt-at">≈ At market</span>`
-			: `<span class="vi-mkt-badge vi-mkt-null">unknown</span>`;
-
-    const pct = Math.min(100, Math.max(0, d.avgsalestomarket));
 
     dataEl.innerHTML = `
 	   <div class="vi-grid">
@@ -532,11 +561,6 @@
     dataEl.style.flex    = '1';
     dataEl.style.overflow = 'hidden';
 
-    requestAnimationFrame(() => {
-      const prog = document.getElementById('vi-prog');
-      if (prog) prog.style.width = pct + '%';
-    });
-
     setStatus('live');
 
     // Update bar metrics
@@ -607,25 +631,12 @@
 .vi-inv-val{font-size:19px;font-weight:800;text-align:center;}
 .vi-inv-val.green{color:#16a34a}.vi-inv-val.amber{color:#d97706}.vi-inv-val.slate{color:#64748b}
 
-/* Market */
-.vi-mkt-tile{grid-column:1/-1;background:#fff;border:1px solid #e8ecf2;border-radius:5px;padding:7px 9px}
-.vi-mkt-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-.vi-mkt-val{font-size:19px;font-weight:800;color:#d97706;letter-spacing:-.5px;margin-bottom:4px}
-.vi-mkt-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px}
-.vi-mkt-below{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
-.vi-mkt-above{background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0}
-.vi-mkt-at{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
-.vi-mkt-null{background:#f5f5f5;color:#a1a1a1;border:1px solid #808080}
-.vi-progress-track{height:5px;background:#f1f5f9;border-radius:3px;overflow:hidden}
-.vi-progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#fbbf24,#ef4444);transition:width .7s cubic-bezier(.34,1.4,.64,1)}
-
+/* Grid (4 columns) */
 .vi-grid-4col{grid-column: 1 / -1;display: grid;grid-template-columns: 1fr 1fr 1fr 1fr;gap: 5px;}
 .vi-grid-4col .vi-big{font-size: 18px;}
 .vi-grid-4col .vi-lbl{font-size: 8px;white-space: nowrap;}
 
 /* Status */
-.vi-status-row{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.vi-status-tile{background:#fff;border:1px solid #e8ecf2;border-radius:5px;padding:6px 9px}
 .vi-status-val{font-size:12px;font-weight:700;color:#1e293b;text-align:center;width:100%;}
 .vi-status-val.retail{color:#1d4ed8}
 
@@ -633,11 +644,11 @@
 .vi-hdr-meta{display: flex; gap: 4px; align-items: center;}
 .vi-hdr-stock{font-family: 'DM Mono', monospace;font-size: 10px; color: #fff; background: rgba(16, 185, 129, 0.2); padding: 2px 7px; border-radius: 3px; border: 1px solid rgba(16, 185, 129, 0.3);}
 .vi-hdr-tier{font-family: 'DM Sans', sans-serif;font-size: 10px;font-weight: 700;padding: 2px 8px;border-radius: 3px;text-transform: uppercase;border: 1px solid rgba(255, 255, 255, 0.2);color: #fff;transition: all 0.3s ease;}
-.vi-tier-1{background:#16a34a;border-color:#15803d;} /* Ciemny zielony */
-.vi-tier-2{background:#84cc16;border-color:#65a30d;} /* Jasny zielony/Limonka */
-.vi-tier-3{background:#eab308;border-color:#ca8a04;} /* Żółty/Złoty */
-.vi-tier-4{background:#f97316;border-color:#ea580c;} /* Pomarańczowy */
-.vi-tier-5{background:#dc2626;border-color:#b91c1c;} /* Czerwony */
+.vi-tier-1{background:#16a34a;border-color:#15803d;} /* Dark green */
+.vi-tier-2{background:#84cc16;border-color:#65a30d;} /* Light green / Lime */
+.vi-tier-3{background:#eab308;border-color:#ca8a04;} /* Yellow / Gold */
+.vi-tier-4{background:#f97316;border-color:#ea580c;} /* Orange */
+.vi-tier-5{background:#dc2626;border-color:#b91c1c;} /* Red */
 .vi-tier-null{background: rgba(148, 163, 184, 0.2);color: #94a3b8;border-color: rgba(148, 163, 184, 0.3);font-family: 'DM Mono', monospace;}
 
 /* Version */
@@ -738,50 +749,48 @@
 		if (now - lastModalCheck < 400) return;
 		lastModalCheck = now;
 
-		// 1. Definiujemy tylko realne kontenery danych
+		// 1. Define only the real data containers
 		const modal = document.querySelector('.pricing-modal-class');
 		const header = document.getElementById('headerVehicleSummary');
 		const iframe = document.getElementById('GaugePageIFrame');
 
-		// 2. Sprawdzamy aktywność (jeśli którykolwiek istnieje, uznajemy, że widok jest otwarty)
-		// Usunięto document.body oraz outerTabs
+		// 2. Check activity (if any of them exists, treat the view as open)
+		// Removed document.body and outerTabs
 		const hasPricingModal = !!(modal || header || iframe);
 
 		if (!hasPricingModal) {
-			// Widok pojazdu zamknięty — sprzątamy panel i bar
+			// Vehicle view closed — clean up the panel and bar
 			if (injectedPanel) { injectedPanel.remove(); injectedPanel = null; }
 			if (injectedBar)   { injectedBar.remove();   injectedBar   = null; }
 			
-			// Reset stanu, aby skrypt był gotowy na kolejny pojazd
+			// Reset state so the script is ready for the next vehicle
 			currentVin   = null;
 			currentStock = null;
-			isMinimized  = false;
 			return;
 		}
 
-		// 3. Pobieramy dane (zakładając, że Twoje funkcje detect już obsługują iframe)
+		// 3. Get the data (assuming the detect functions already handle the iframe)
 		const vin = detectVin();
 		const stock = detectStock();
 		
-		// --- Logowanie zmian do konsoli (tylko przy wykryciu nowej wartości) ---
+		// --- Log changes to the console (only when a new value is detected) ---
 		if ((vin || stock) && (vin !== currentVin || stock !== currentStock)) {
 			console.log(`%c[VI Extension] Found -> VIN: ${vin || '❌'}, Stock: ${stock || '❌'}`, "color: #1e4fc2; font-weight: bold;");
 		}
 		
 		if (!vin) return;
 
-		// 4. Logika wstrzykiwania/aktualizacji panelu
+		// 4. Panel injection/update logic
 		if (vin !== currentVin || stock !== currentStock) {
-			// Zmiana pojazdu lub pierwsze wykrycie — czyścimy stare i budujemy nowe
+			// Vehicle changed or first detection — clear the old and build the new
 			if (injectedPanel) { injectedPanel.remove(); injectedPanel = null; }
 			if (injectedBar)   { injectedBar.remove();   injectedBar   = null; }
 			
 			currentVin   = vin;
 			currentStock = stock;
-			isMinimized  = false;
 			injectPanel(vin, stock);
 		} else if (!injectedPanel) {
-			// Jeśli dane te same, ale panel zniknął (np. po przeładowaniu fragmentu DOM)
+			// If the data is the same but the panel disappeared (e.g. after a DOM fragment reload)
 			injectPanel(vin, stock);
 		}
 	}

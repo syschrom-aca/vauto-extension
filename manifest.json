@@ -4,11 +4,6 @@
   "version": "1.1.8",
   "description": "Cox Automotive pricing assistant - surfaces Microsoft Fabric data for every VIN in vAuto.",
 
-  "permissions": [
-    "storage",
-    "activeTab"
-  ],
-
   "host_permissions": [
     "https://*.vauto.com/*",
     "https://*.coxautoinc.com/*",
